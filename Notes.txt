@@ -1,0 +1,31 @@
+-purely functional
+-pattern matching (match with)
+-custom types *
+-if b then x else
+-optional typing
+-contravariant/covariant types *
+-no semicolons
+-no curly braces for control only for types within structures
+-types after variables with colon separator
+-ints, vectors
+-floats
+-pairs *
+-currying
+
+examples:
+let x = 10
+let f(x:int, y:float):float = y
+let g(a, b) = let h(x) = x in a + h(b)
+let map(a:vector{int}, f:(int->float)):vector{float} =
+match a with
+| [] -> []
+| h::t -> map(h, f)::f(t)
+
+keywords:
+let, vector, int, bool, in, match, with, true, false, float
+
+operators:
+=, ::, +, -, *, /, &&, ||, ==, !
+
+punctuation:
+(, ), {, }, :, ,, |, [, ], [], ->
