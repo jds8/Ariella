@@ -65,4 +65,4 @@ tokens = lex(t, "code.txt");
 types = String["int", "float"];
 
 # Parse the tokens given the operators
-prog = ParserModule.parse(tokens, ops, types)
+prog = ParserModule.parse(tokens, ops, types);

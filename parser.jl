@@ -107,6 +107,8 @@ struct Let_Binding <: Expression
     variable::Variable
     exp::Expression
     rest::Expression
+    Let_Binding(var::Variable, exp::Expression, rest::Expression) = new(var, exp, rest);
+    Let_Binding(var::Variable, exp::Expression) = new(var, exp, Null_Expression());
 end
 
 abstract type Abstract_Cons_Expression <: Matchable_Expression end;
@@ -148,13 +150,13 @@ function skip_sym(p::Parser, symbol::String)
 end
 
 # Parses a binary expression
-function maybe_binary(p::Parser, left::Expression, leftPrecedence::Int64)
+function maybe_binary(p::Parser, left::Expression, left_precedence::Int64)
     op = next_op(p);
-    if is_valid(op) && op.precedence > leftPrecedence
+    if is_valid(op) && op.precedence > left_precedence
         skip_sym(p, op.value);
         right = maybe_binary(p, parse_atom(p), op.precedence);
         bin_exp = Binary_Expression(left, op, right);
-        return maybe_binary(p, bin_exp, op.precedence)
+        return maybe_binary(p, bin_exp, left_precedence);
     else
         return left;
     end
@@ -294,19 +296,19 @@ end
 function parse_let_binding(p::Parser)
     # the variable name must come after `let`
     skip_sym(p, "let");
-    varToken = next(p);
-    if varToken.class != var::Class
-        throw(string("Invalid syntax: `let ", varToken.value, "`"));
+    var_token = next(p);
+    if var_token.class != var::Class
+        throw(string("Invalid syntax: `let ", var_token.value, "`"));
     else
-        varBinding = parse_variable_binding(p, varToken.value);
-        expr = parse_rhs(p, varBinding);
-        # the next token must be the keyword `in` to be valid syntax
-        if !is_next(p, "in")
-            throw(string("Invalid syntax; expected `in` after variable assignment"));
-        else
+        var_binding = parse_variable_binding(p, var_token.value);
+        expr = parse_rhs(p, var_binding);
+        # the next token can be the keyword `in` to continue the current program
+        if is_next(p, "in")
             skip_sym(p, "in");
             rest_of_program = parse_expression(p);
-            return Let_Binding(varBinding, expr, rest_of_program);
+            return Let_Binding(var_binding, expr, rest_of_program);
+        else
+            return Let_Binding(var_binding, expr);
         end
     end
 end

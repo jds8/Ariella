@@ -1,5 +1,5 @@
 let f(x:int, y:(int->int->float)):float = y(x,x) in
-let g(x:int, y:float):float = 3.434*4.9 in
+let g():int = 3*5+1*2 in
 let h(x:int, y:float):float = x + y in
 match lst with
 | h::t -> h
