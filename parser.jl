@@ -4,6 +4,9 @@ import Base.parse;
 
 export Parser, parse, next, parse_type_annotation, Variable_Type, Concrete_Type;
 export Int_Type, Float_Type, Function_Type;
+export Null_Expression, If_Statement, Binary_Expression, Call, Let_Binding;
+export Abstract_Cons_Expression, Cons_Expression, Empty_Cons_Expression;
+export Pattern_Match;
 
 using Main.LexerModule
 

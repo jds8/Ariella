@@ -21,9 +21,10 @@ struct Operator
     value::String
     precedence::Int64
     op_class::Operator_Class
+    operation::Function
 end
 
-Operator(val::String) = Operator(val, -1, null::Operator_Class);
+Operator(val::String) = Operator(val, -1, null::Operator_Class, ()->throw("Null operator"));
 
 is_valid(o::Operator) = o.precedence >= 1;
 
@@ -44,6 +45,13 @@ function addToken!(t::Tokenizer, tokenVal::String, tokenClass::Class)
     t.tokens[tokenVal] = tokenClass;
     if tokenClass == op::Class || tokenClass == punc::Class
         t.opAndPunc[tokenVal] = tokenClass;
+    end
+end
+
+# Add operators to tokenizer
+function addToken!(t::Tokenizer, ops::Array{Operator,1})
+    for operator in ops
+        addToken!(t, operator.value, op::Class);
     end
 end
 

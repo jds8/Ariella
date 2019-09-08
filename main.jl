@@ -1,8 +1,10 @@
 include("./lexer.jl");
 include("./parser.jl");
+include("./interpreter.jl");
 
 using Main.LexerModule
 using Main.ParserModule
+using Main.Interpreter
 
 import Main.LexerModule.op
 import Main.LexerModule.kw
@@ -13,22 +15,17 @@ import Main.LexerModule.binary
 # Create Tokenizer
 t = Tokenizer();
 
-# Add operator tokens
-addToken!(t, "=", op);
-addToken!(t, "+", op);
-addToken!(t, "-", op);
-addToken!(t, "*", op);
-addToken!(t, "/", op);
-addToken!(t, "::", op);
-
 # Create operators
 ops = Operator[];
-push!(ops, Operator("=", 1, assign));
-push!(ops, Operator("+", 10, binary));
-push!(ops, Operator("-", 10, binary));
-push!(ops, Operator("*", 20, binary));
-push!(ops, Operator("/", 20, binary));
-push!(ops, Operator("::", 30, binary));
+push!(ops, Operator("+", 10, binary, +));
+push!(ops, Operator("-", 10, binary, -));
+push!(ops, Operator("*", 20, binary, *));
+push!(ops, Operator("/", 20, binary, /));
+# h::t is the cons operator which prepends elements h onto t in a new list
+push!(ops, Operator("::", 30, binary, (h,t)->(h_copy=deepcopy(h);push!(hh, t...);)));
+
+# Add operator tokens
+addToken!(t, ops);
 
 # Add keyword tokens
 addToken!(t, "match", kw);
@@ -66,3 +63,6 @@ types = String["int", "float"];
 
 # Parse the tokens given the operators
 prog = ParserModule.parse(tokens, ops, types);
+
+#Interpreter.interpret(prog);
+Interpreter.evaluate(prog[1].rest.exp)
