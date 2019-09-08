@@ -99,19 +99,20 @@ end
 
 struct Function_Variable <: Variable
     name::String
-    return_type::Variable_Type
     args::Array{Expression_Variable,1}
+    return_type::Variable_Type
 end
 
 struct Let_Binding <: Expression
     variable::Variable
     exp::Expression
+    rest::Expression
 end
 
 abstract type Abstract_Cons_Expression <: Matchable_Expression end;
 
 struct Cons_Expression <: Abstract_Cons_Expression
-    head::Expression_Variable
+    head::String
     tail::Abstract_Cons_Expression
 end
 
@@ -260,7 +261,7 @@ function parse_function_binding(p::Parser, varName::String)
         skip_sym(p, ":");
         returnType = parse_type_annotation(p);
     end
-    return Function_Variable(varName, returnType, args);
+    return Function_Variable(varName, args, returnType);
 end
 
 # Parses a variable binding within a let binding
@@ -299,13 +300,13 @@ function parse_let_binding(p::Parser)
     else
         varBinding = parse_variable_binding(p, varToken.value);
         expr = parse_rhs(p, varBinding);
-        letBinding = Let_Binding(varBinding, expr);
         # the next token must be the keyword `in` to be valid syntax
         if !is_next(p, "in")
             throw(string("Invalid syntax; expected `in` after variable assignment"));
         else
             skip_sym(p, "in");
-            return letBinding;
+            rest_of_program = parse_expression(p);
+            return Let_Binding(varBinding, expr, rest_of_program);
         end
     end
 end
@@ -364,7 +365,7 @@ function parse_cons_exp(p::Parser)
         skip_sym(p, "::");
         tok = next(p);
         tail_cons = parse_cons_exp(p);
-        return Cons_Expression(Expression_Variable(tok.value), tail_cons);
+        return Cons_Expression(tok.value, tail_cons);
     else
         return Empty_Cons_Expression();
     end
@@ -376,7 +377,7 @@ function parse_matchable_exp(p::Parser)
     if is_matchable(tok);
         if is_next(p, "::")
             tail_cons = parse_cons_exp(p);
-            return Cons_Expression(Expression_Variable(tok.value), tail_cons);
+            return Cons_Expression(tok.value, tail_cons);
         #elseif tok.value == "("
         #    return parse_pair(p, tok)
         else
