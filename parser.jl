@@ -78,6 +78,12 @@ struct Function_Type <: Variable_Type
     return_type::Variable_Type;
 end
 
+# Define equality on Function_Types
+import Base.==
+function ==(x::Function_Type, y::Function_Type)
+    return x.arg_types == y.arg_types && x.return_type == y.return_type
+end
+
 # Gets a Variable_Type object from an input string
 function get_type(type_str::String)
     if type_str == "int"
