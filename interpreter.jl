@@ -98,25 +98,35 @@ function co_operable(f1::Function_Value, f2::Function_Value)
     return f1.type == f2.type
 end
 
+# Gets the arguments of f as a string of the form "(x, y::Type,...)"
+function get_args_str(f::Function_Value)
+    arg_list = String[];
+    for (i, arg) in enumerate(v1.type.arg_types)
+        arg_name = repeat("x", i);
+        arg_type = convert_type_str(arg);
+        # Add type annotation if type is not dynamic
+        arg_type = isempty(arg_type) ? arg_type : string("::", arg_type);
+        arg_with_type = string(arg_name, arg_type);
+        push!(arg_list, arg_with_type);
+    end
+    # args_str is the arguments of the anonymous function
+    args_str = string("(", join(arg_list, ","), ")");
+end
+
+# Creates a Julia Function from an arguments string and a return string
+function generate_fun_from_strs(args_str::String, out_str::String)::Function
+    # parses the concatenation of these strings and evaluates to get a function
+    return eval(Meta.parse(string(args_str, "->", out_str)));
+end
+
 # Creates a function out of two functions using an operator string
 # Outputs a Julia function
 function create_fn(v1::Function_Value, op::Function, v2::Function_Value)::Function
     if co_operable(v1, v2)
-        arg_list = String[];
-        for (i, arg) in enumerate(v1.type.arg_types)
-            arg_name = repeat("x", i);
-            arg_type = convert_type_str(arg);
-            # Add type annotation if type is not dynamic
-            arg_type = isempty(arg_type) ? arg_type : string("::", arg_type);
-            arg_with_type = string(arg_name, arg_type);
-            push!(arg_list, arg_with_type);
-        end
-        # args_str is the arguments of the anonymous function
-        args_str = string("(", join(arg_list, ","), ")");
+        args_str = get_args_str(v1);
         # out_str is a string representing the definition of the function
         out_str = string(v1.value, args_str, op, v2.value, args_str);
-        # parse the concatenation of these strings and evaluate to get a function
-        return eval(Meta.parse(string(args_str, "->", out_str)));
+        return generate_fun_from_strs(args_str, out_str);
     end
     throw("Input functions are of different types.")
 end
@@ -133,6 +143,47 @@ function *(v1::Function_Value, v2::Function_Value)
 end
 function /(v1::Function_Value, v2::Function_Value)
     return Function_Value(create_fn(v1, /, v2), v1.type);
+end
+
+# Returns a Function_Value of the same type as v1 that simply returns v2
+# Throws if v2 is a different type from the return type of v1
+function num_to_fun(num::Number_Value{T}, fun::Function_Value)::Function where {T <: Real}
+    if num.type == fun.type.return_type
+        args_str = get_args_str(fun);
+        new_fun = generate_fun_from_strs(args_str, string(num.value));
+        return Function_Value(new_fun, fun.type);
+    end
+    throw(string("Cannot add ", num, " to output of ", fun));
+end
+
+# Override operators for functions and numbers
+function +(v1::Function_Value, v2::Number_Value{T}) where {T <: Real}
+    f2 = num_to_fun(v2, v1);
+    return Function_Value(create_fn(v1, +, f2), v1.type);
+end
+function -(v1::Function_Value, v2::Number_Value{T}) where {T <: Real}
+    f2 = num_to_fun(v2, v1);
+    return Function_Value(create_fn(v1, -, f2), v1.type);
+end
+function *(v1::Function_Value, v2::Number_Value{T}) where {T <: Real}
+    f2 = num_to_fun(v2, v1);
+    return Function_Value(create_fn(v1, *, f2), v1.type);
+end
+function /(v1::Function_Value, v2::Number_Value{T}) where {T <: Real}
+    f2 = num_to_fun(v2, v1);
+    return Function_Value(create_fn(v1, /, f2), v1.type);
+end
+function +(v1::Number_Value{T}, v2::Function_Value) where {T <: Real}
+    return +(v2, v1);
+end
+function -(v1::Number_Value{T}, v2::Function_Value) where {T <: Real}
+    return -(v2, v1);
+end
+function *(v1::Number_Value{T}, v2::Function_Value) where {T <: Real}
+    return *(v2, v1);
+end
+function /(v1::Number_Value{T}, v2::Function_Value) where {T <: Real}
+    return /(v2, v1);
 end
 
 # Definition_Table is for storing variable name->Value pairs
