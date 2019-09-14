@@ -15,6 +15,7 @@ using Main.ParserModule;
 
 export interpret, evaluate;
 
+# Gets Ariella type given a Julia value
 function get_type(val::T) where {T <: Real}
     if isa(val, Int64)
         return Int_Type();
@@ -24,11 +25,34 @@ function get_type(val::T) where {T <: Real}
     throw(string(val, " is a number of an unsupported primitive type."));
 end
 
+# Converts an Ariella type to a Julia type
+function convert_concrete_type(atype::Concrete_Type)
+    if isa(atype, Int_Type)
+        return Int64;
+    elseif isa(atype, Float_Type)
+        return Float64;
+    elseif isa(atype, Function_Type)
+        return Function;
+    end
+    throw("Unknown Ariella primitive type");
+end
+
+# Converts an Ariella type to a Julia type string
+function convert_type_str(atype::Variable_Type)
+    if isa(atype, Concrete_Type)
+        return string(convert_concrete_type(atype));
+    elseif isa(atype, Dynamic_Type)
+        return "";
+    else
+        throw("Unknown Ariella type");
+    end
+end
+
 abstract type Value end;
 
 struct Number_Value{T <: Real} <: Value
     value::T
-    type::Concrete_Type
+    type::Primitive_Type
     Number_Value(val::T) = new(val, get_type(val));
 end
 
@@ -37,17 +61,17 @@ struct Function_Value <: Value
     type::Function_Type
 end
 
-# Define operations on Concrete_Types
+# Define operations on Primitive_Types
 ##################################################
 import Base.+, Base.-, Base.*, Base./
-+(x::Float_Type, y::Concrete_Type) = Float_Type();
--(x::Float_Type, y::Concrete_Type) = Float_Type();
-*(x::Float_Type, y::Concrete_Type) = Float_Type();
-/(x::Float_Type, y::Concrete_Type) = Float_Type();
-+(x::Concrete_Type, y::Float_Type) = Float_Type();
--(x::Concrete_Type, y::Float_Type) = Float_Type();
-*(x::Concrete_Type, y::Float_Type) = Float_Type();
-/(x::Concrete_Type, y::Float_Type) = Float_Type();
++(x::Float_Type, y::Primitive_Type) = Float_Type();
+-(x::Float_Type, y::Primitive_Type) = Float_Type();
+*(x::Float_Type, y::Primitive_Type) = Float_Type();
+/(x::Float_Type, y::Primitive_Type) = Float_Type();
++(x::Primitive_Type, y::Float_Type) = Float_Type();
+-(x::Primitive_Type, y::Float_Type) = Float_Type();
+*(x::Primitive_Type, y::Float_Type) = Float_Type();
+/(x::Primitive_Type, y::Float_Type) = Float_Type();
 +(x::Int_Type, y::Int_Type) = Int_Type();
 -(x::Int_Type, y::Int_Type) = Int_Type();
 *(x::Int_Type, y::Int_Type) = Int_Type();
@@ -74,30 +98,41 @@ function co_operable(f1::Function_Value, f2::Function_Value)
     return f1.type == f2.type
 end
 
+# Creates a function out of two functions using an operator string
+# Outputs a Julia function
+function create_fn(v1::Function_Value, op::Function, v2::Function_Value)::Function
+    if co_operable(v1, v2)
+        arg_list = String[];
+        for (i, arg) in enumerate(v1.type.arg_types)
+            arg_name = repeat("x", i);
+            arg_type = convert_type_str(arg);
+            # Add type annotation if type is not dynamic
+            arg_type = isempty(arg_type) ? arg_type : string("::", arg_type);
+            arg_with_type = string(arg_name, arg_type);
+            push!(arg_list, arg_with_type);
+        end
+        # args_str is the arguments of the anonymous function
+        args_str = string("(", join(arg_list, ","), ")");
+        # out_str is a string representing the definition of the function
+        out_str = string(v1.value, args_str, op, v2.value, args_str);
+        # parse the concatenation of these strings and evaluate to get a function
+        return eval(Meta.parse(string(args_str, "->", out_str)));
+    end
+    throw("Input functions are of different types.")
+end
+
 # Override operators for functions
 function +(v1::Function_Value, v2::Function_Value)
-    if co_operable(v1, v2)
-        return Function_Value(v1.value + v2.value, v1.type);
-    end
-    throw(string("Cannot add functions of different types: ", v1, " ", v2));
+    return Function_Value(create_fn(v1, +, v2), v1.type);
 end
 function -(v1::Function_Value, v2::Function_Value)
-    if co_operable(v1, v2)
-        return Function_Value(v1.value - v2.value, v1.type);
-    end
-    throw(string("Cannot subtract functions of different types: ", v1, " ", v2));
+    return Function_Value(create_fn(v1, -, v2), v1.type);
 end
 function *(v1::Function_Value, v2::Function_Value)
-    if co_operable(v1, v2)
-        return Function_Value(v1.value * v2.value, v1.type);
-    end
-    throw(string("Cannot multiply functions of different types: ", v1, " ", v2));
+    return Function_Value(create_fn(v1, *, v2), v1.type);
 end
 function /(v1::Function_Value, v2::Function_Value)
-    if co_operable(v1, v2)
-        return Function_Value(v1.value / v2.value, v1.type);
-    end
-    throw(string("Cannot divide functions of different types: ", v1, " ", v2));
+    return Function_Value(create_fn(v1, /, v2), v1.type);
 end
 
 # Definition_Table is for storing variable name->Value pairs
@@ -168,7 +203,7 @@ function evaluate(call::Call, table::Definition_Table)
             end
         end
         # Create an expression of a call and all the arguments
-        call_value = Expr(:call, :(value.value), (args.→:value)...);
+        call_value = eval(Expr(:call, :(value.value), (args.→:value)...));
         return Value(call_value, value.type.return_type);
     else
         throw(string("Function requires ", length(fn_type.arg_types), " arguments.");
