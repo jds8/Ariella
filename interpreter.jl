@@ -16,44 +16,31 @@ using Main.ParserModule;
 export interpret, evaluate;
 
 # Gets Ariella type given a Julia value
-function get_type(val::T) where {T <: Real}
-    if isa(val, Int64)
-        return Int_Type();
-    elseif isa(val, Float64);
-        return Float_Type();
-    end
-    throw(string(val, " is a number of an unsupported primitive type."));
-end
-
-# Converts an Ariella type to a Julia type
-function convert_concrete_type(atype::Concrete_Type)
-    if isa(atype, Int_Type)
-        return Int64;
-    elseif isa(atype, Float_Type)
-        return Float64;
-    elseif isa(atype, Function_Type)
-        return Function;
-    end
-    throw("Unknown Ariella primitive type");
-end
+get_type(val::Int64) = Int_Type();
+get_type(val::Float64) = Float_Type();
+get_type(val::Bool) = Bool_Type();
 
 # Converts an Ariella type to a Julia type string
-function convert_type_str(atype::Variable_Type)
-    if isa(atype, Concrete_Type)
-        return string(convert_concrete_type(atype));
-    elseif isa(atype, Dynamic_Type)
-        return "";
-    else
-        throw("Unknown Ariella type");
-    end
-end
+convert_type_to_str(atype::Int_Type) = string(Int64);
+convert_type_to_str(atype::Float_Type) = string(Float64);
+convert_type_to_str(atype::Bool_Type) = string(Bool);
+convert_type_to_str(atype::Function_Type) = string(Function);
+convert_type_to_str(atype::Dynamic_Type) = "";
 
 abstract type Value end;
 
 struct Number_Value{T <: Real} <: Value
     value::T
-    type::Primitive_Type
+    type::Numeric_Type
     Number_Value(val::T) = new(val, get_type(val));
+    Number_Value(val::T, type::Numeric_Type) = type == get_type(val) ? new(val,type) : error("Type mismatch");
+end
+
+struct Bool_Value <: Value
+    value::Bool
+    type::Bool_Value()
+    Bool_Value(val::Bool) = new(val, Bool_Value());
+    Bool_Value(val::Bool, type::Bool_Value) = new(val, type);
 end
 
 struct Function_Value <: Value
@@ -64,14 +51,14 @@ end
 # Define operations on Primitive_Types
 ##################################################
 import Base.+, Base.-, Base.*, Base./
-+(x::Float_Type, y::Primitive_Type) = Float_Type();
--(x::Float_Type, y::Primitive_Type) = Float_Type();
-*(x::Float_Type, y::Primitive_Type) = Float_Type();
-/(x::Float_Type, y::Primitive_Type) = Float_Type();
-+(x::Primitive_Type, y::Float_Type) = Float_Type();
--(x::Primitive_Type, y::Float_Type) = Float_Type();
-*(x::Primitive_Type, y::Float_Type) = Float_Type();
-/(x::Primitive_Type, y::Float_Type) = Float_Type();
++(x::Float_Type, y::Numeric_Type) = Float_Type();
+-(x::Float_Type, y::Numeric_Type) = Float_Type();
+*(x::Float_Type, y::Numeric_Type) = Float_Type();
+/(x::Float_Type, y::Numeric_Type) = Float_Type();
++(x::Numeric_Type, y::Float_Type) = Float_Type();
+-(x::Numeric_Type, y::Float_Type) = Float_Type();
+*(x::Numeric_Type, y::Float_Type) = Float_Type();
+/(x::Numeric_Type, y::Float_Type) = Float_Type();
 +(x::Int_Type, y::Int_Type) = Int_Type();
 -(x::Int_Type, y::Int_Type) = Int_Type();
 *(x::Int_Type, y::Int_Type) = Int_Type();
@@ -94,23 +81,24 @@ function /(v1::Number_Value{T}, v2::Number_Value{U}) where {T,U <: Real}
 end
 
 # Determines if we can operate on these two function variables
+# Only works when the return type is numeric (for now)
 function co_operable(f1::Function_Value, f2::Function_Value)
-    return f1.type == f2.type
+    return f1.type == f2.type && isa(f1.type.return_type, Numeric_Type)
 end
 
 # Gets the arguments of f as a string of the form "(x, y::Type,...)"
-function get_args_str(f::Function_Value)
+function get_rest_of_args(f::Function_Type, index::Int64 = 1)
     arg_list = String[];
-    for (i, arg) in enumerate(v1.type.arg_types)
+    for (i, arg) in enumerate(f.arg_types[index:end])
         arg_name = repeat("x", i);
-        arg_type = convert_type_str(arg);
+        arg_type = convert_type_to_str(arg);
         # Add type annotation if type is not dynamic
         arg_type = isempty(arg_type) ? arg_type : string("::", arg_type);
         arg_with_type = string(arg_name, arg_type);
         push!(arg_list, arg_with_type);
     end
-    # args_str is the arguments of the anonymous function
-    args_str = string("(", join(arg_list, ","), ")");
+    # Return the arguments of an anonymous function
+    return string("(", join(arg_list, ","), ")");
 end
 
 # Creates a Julia Function from an arguments string and a return string
@@ -123,7 +111,7 @@ end
 # Outputs a Julia function
 function create_fn(v1::Function_Value, op::Function, v2::Function_Value)::Function
     if co_operable(v1, v2)
-        args_str = get_args_str(v1);
+        args_str = get_rest_of_args(v1.type);
         # out_str is a string representing the definition of the function
         out_str = string(v1.value, args_str, op, v2.value, args_str);
         return generate_fun_from_strs(args_str, out_str);
@@ -149,7 +137,7 @@ end
 # Throws if v2 is a different type from the return type of v1
 function num_to_fun(num::Number_Value{T}, fun::Function_Value)::Function where {T <: Real}
     if num.type == fun.type.return_type
-        args_str = get_args_str(fun);
+        args_str = get_rest_of_args(fun.type);
         new_fun = generate_fun_from_strs(args_str, string(num.value));
         return Function_Value(new_fun, fun.type);
     end
@@ -236,28 +224,45 @@ function add!(table::Definition_Table, var::Function_Variable, exp::Expression)
     end
 end
 
-→(lst, field) = getfield(lst, field);
+# An infix operator that returns the field of the obj
+→(obj, field) = getfield(obj, field);
+
+# Returns a particular Value
+make_value(num_val::T, type::Numeric_Type) = Number_Value(num_val);
+make_value(bool_val::Bool, type::Bool_Type) = Bool_Value(bool_val);
+make_value(fun_val::Function, type::Function_Type) = Function_Value(fun_val, type);
 
 function evaluate(call::Call, table::Definition_Table)
     value = evaluate(call.exp, table);
     fn_type = value.type;
-    if length(fn_type.arg_types) == length(call.arg_list)
+    # The number of arguments supplied can be fewer than the number requied
+    # The result in this case would be a curried function
+    num_missing_args = length(fn_type.arg_types) - length(call.arg_list);
+    if num_missing_args >= 0
         args = Value[];
         for (i,arg) in enumerate(call.arg_list)
             arg_value = evaluate(arg, table);
             fn_arg_type = fn_type.arg_types[i];
             # If the function argument type does not match the input type, throw
-            if arg_value.type != fn_arg_type && fn_arg_type == Dynamic_Type()
+            if arg_value.type != fn_arg_type && fn_arg_type != Dynamic_Type()
                 throw(string("Type mismatch: ", arg_value, " is not a ", fn_arg_type));
             else
                 push!(args, arg_value);
             end
         end
         # Create an expression of a call and all the arguments
-        call_value = eval(Expr(:call, :(value.value), (args.→:value)...));
-        return Value(call_value, value.type.return_type);
+        args_str = get_rest_of_args(value.type, length(args));
+        # If all arguments have been supplied, then call the function
+        if args_str == "()"
+            call_value = eval(Expr(:call, :(value.value), (args.→:value)...));
+        # Otherwise, curry it
+        else
+            out_str = string();
+            call_value = generate_fun_from_strs(args_str, out_str);
+        end
+        return make_value(call_value, value.type.return_type);
     else
-        throw(string("Function requires ", length(fn_type.arg_types), " arguments.");
+        throw(string(length(fn_type.arg_types), " arguments expected, but ", length(cal.arg_list), " provided."));
     end
 end
 

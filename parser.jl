@@ -2,7 +2,8 @@ module ParserModule
 
 import Base.parse;
 
-export Parser, parse, next, parse_type_annotation, Variable_Type, Primitive_Type;
+export Parser, parse, next, parse_type_annotation;
+export Variable_Type, Dynamic_Type, Concrete_Type, Primitive_Type, Numeric_Type;
 export Int_Type, Float_Type, Function_Type;
 export Null_Expression, If_Statement, Binary_Expression, Call, Let_Binding;
 export Abstract_Cons_Expression, Cons_Expression, Empty_Cons_Expression;
@@ -70,8 +71,10 @@ struct Dynamic_Type <: Variable_Type end;
 # Define concrete types of variables
 abstract type Concrete_Type <: Variable_Type end;
 abstract type Primitive_Type <: Concrete_Type end;
-struct Float_Type <: Primitive_Type end;
-struct Int_Type <: Primitive_Type end;
+abstract type Numeric_Type <: Primitive_Type end;
+struct Float_Type <: Numeric_Type end;
+struct Int_Type <: Numeric_Type end;
+struct Bool_Type <: Primitive_Type end;
 
 # Define function types for functions
 struct Function_Type <: Concrete_Type
