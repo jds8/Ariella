@@ -229,8 +229,8 @@ function add!(table::Definition_Table, var::Function_Variable, exp::Expression)
     end
 end
 
-# An infix operator that returns the field of the obj
-→(obj, field) = getfield(obj, field);
+# An infix operator that applies fun on obj
+→(obj, fun) = fun(obj);
 
 # Returns a particular Value
 make_value(num_val::T, type::Numeric_Type) = Number_Value(num_val);
@@ -239,10 +239,18 @@ make_value(fun_val::Function, type::Function_Type) = Function_Value(fun_val, typ
 
 # Returns a string representing the first length(args) arguments of
 # the function being supplied by args and the rest supplied as x,xx,xxx...
-function get_partial_application_str(fn::Function_Value, args::Args{Value,1}, other_args::String)
-    for arg in args
-
-    end
+# @param fn The function in question
+# @param args A list of supplied arguments
+# @param other_args A string of the form (x,xx,..) which are the unsupplied arguments
+# @return A string of the form f(a,b,x,xx,..) where a and b are the supplied
+# arguments and x,xx,... are the unsupplied ones
+function get_partial_application_str(fn::Function, args::Array{Value,1}, other_args::String)
+    # Ignore the initial "(" in other_args
+    unsupplied_args = other_args[2:end];
+    output_call = string(fn, "(");
+    output_call = string(output_call, join(args.→get_value, ","), ",");
+    output_call = string(output_call, unsupplied_args);
+    return output_call;
 end
 
 function evaluate(call::Call, table::Definition_Table)
@@ -268,10 +276,10 @@ function evaluate(call::Call, table::Definition_Table)
         args_str = get_rest_of_args(fn_type, length(args));
         # If all arguments have been supplied, then call the function
         if args_str == "()"
-            call_value = eval(Expr(:call, :(fn_value), (args.→:value)...));
+            call_value = eval(Expr(:call, fn_value, (args.→get_value)...));
         # Otherwise, curry it
         else
-            out_str = get_partial_application_str(value, args, args_str);
+            out_str = get_partial_application_str(fn_value, args, args_str);
             call_value = generate_fun_from_strs(args_str, out_str);
         end
         return make_value(call_value, fn_type.return_type);
