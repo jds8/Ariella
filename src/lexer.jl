@@ -5,7 +5,7 @@ export getOperatorStrings, addToken!, lex, is_valid;
 
 using DelimitedFiles
 
-@enum Class op=1 var=2 number=3 kw=4 punc=5 eof=6
+@enum Class op=1 var=2 number=3 boolean=4 kw=5 punc=6 eof=7
 
 abstract type Expression end;
 abstract type Matchable_Expression <: Expression end;
@@ -73,6 +73,11 @@ function isNumber(token::String)
     end
 end
 
+# Determines if the input is a boolean
+function isBoolean(token::String)
+    return token == "true" || token == "false";
+end
+
 # Returns the longest key in dict that occurs in str starting at
 # getNumberStartingAtIndex. Also returns the index where key is
 # Returns the empty string along with startIndex if no key occurs in str along
@@ -109,6 +114,8 @@ function getTokens(t::Tokenizer, str::String)
     if isempty(key)
         if isNumber(str)
             push!(output, Token(number::Class, str))
+        elseif isBoolean(str)
+            push!(output, Token(boolean::Class, str))
         elseif !isempty(str)
             push!(output, Token(var::Class, str))
         end
@@ -119,13 +126,16 @@ function getTokens(t::Tokenizer, str::String)
         if !isempty(previousSubStr)
             # If the previous substring is a token, then add it
             if haskey(t.tokens, previousSubStr)
-                push!(output, Token(t.tokens[previousSubStr], previousSubStr))
-            # Otherwise, check if it's a isNumber
+                push!(output, Token(t.tokens[previousSubStr], previousSubStr));
+            # Otherwise, check if it's a number
             elseif isNumber(previousSubStr)
-                push!(output, Token(number::Class, previousSubStr))
+                push!(output, Token(number::Class, previousSubStr));
+            # Check if it's a boolean
+            elseif isBoolean(previousSubStr)
+                push!(output, Token(boolean::Class, previousSubStr));
             # If not, add it as a variable
             else
-                push!(output, Token(var::Class, previousSubStr))
+                push!(output, Token(var::Class, previousSubStr));
             end
         end
         # Add key as a punctuation token

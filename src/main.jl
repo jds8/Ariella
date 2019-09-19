@@ -21,6 +21,11 @@ push!(ops, Operator("+", 10, binary, +));
 push!(ops, Operator("-", 10, binary, -));
 push!(ops, Operator("*", 20, binary, *));
 push!(ops, Operator("/", 20, binary, /));
+push!(ops, Operator("<", 10, binary, <));
+push!(ops, Operator("<=", 5, binary, <=));
+push!(ops, Operator("==", 5, binary, ==));
+push!(ops, Operator(">", 5, binary, >));
+push!(ops, Operator(">=", 5, binary, >=));
 # h::t is the cons operator which prepends elements h onto t in a new list
 push!(ops, Operator("::", 30, binary, (h,t)->(h_copy=deepcopy(h);push!(hh, t...);)));
 

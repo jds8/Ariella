@@ -194,23 +194,23 @@ end
 
 function evaluate(t::Token, table::Definition_Table)
     if t.class == number::Class
-        if occursin(".", t.value)
-            return Number_Value(parse(Float64, t.value));
-        else
-            return Number_Value(parse(Int64, t.value));
-        end
+        return Number_Value(Meta.parse(t.value));
+    elseif t.class == boolean::Class
+        return Bool_Value(t.value);
     elseif t.class == var::Class
         return get(table, t);
     end
     throw(string("Cannot evaluate token ", t.value, " of class ", t.class));
 end
 
+# Evaluate a binary expression
 function evaluate(binary_exp::Binary_Expression, table::Definition_Table)
-    left_val = evaluate(binary_exp.left);
-    right_val = evaluate(binary_exp.right);
+    left_val = evaluate(binary_exp.left, table);
+    right_val = evaluate(binary_exp.right, table);
     return binary_exp.operator.operation(left_val, right_val);
 end
 
+# Add an expression variable to the Definition_Table
 function add!(table::Definition_Table, var::Expression_Variable, exp::Expression)
     value = evaluate(exp, table);
     if var.type == Dynamic_Type() || var.type == value.type
@@ -220,6 +220,7 @@ function add!(table::Definition_Table, var::Expression_Variable, exp::Expression
     end
 end
 
+# Add a function variable to the Definition_Table
 function add!(table::Definition_Table, var::Function_Variable, exp::Expression)
     value = evaluate(exp, table);
     if var.return_type == Dynamic_Type() || var.return_type == value.type
@@ -253,6 +254,7 @@ function get_partial_application_str(fn::Function, args::Array{Value,1}, other_a
     return output_call;
 end
 
+# Evaluates a Call expression
 function evaluate(call::Call, table::Definition_Table)
     value = evaluate(call.exp, table);
     fn_value = get_value(value);
@@ -288,11 +290,14 @@ function evaluate(call::Call, table::Definition_Table)
     end
 end
 
+# Evaluates a let-binding
 function evaluate(let_binding::Let_Binding, table::Definition_Table)
-    add!(table, let_binding.variable, let_binding.exp);
+    value = evaluate(let_binding.exp);
+    add!(table, let_binding.variable, value);
     evaluate(let_binding.rest, table);
 end
 
+# Interprets a program
 function interpret(prog::Array{Expression, 1})
     table = Definition_Table();
     for exp in prog

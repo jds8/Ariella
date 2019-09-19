@@ -289,6 +289,7 @@ function parse_expr_binding(p::Parser, varName::String)
     return Expression_Variable(varName, type);
 end
 
+# Parses right hand side of assignment
 function parse_rhs(p::Parser, variable::Variable)
     if is_next(p, "=")
         skip_sym(p, "=");
@@ -326,6 +327,13 @@ function parse_let_binding(p::Parser)
     end
 end
 
+# Returns whether the input is an atom
+function is_atom(tok::Token)
+    return tok.class == var::Class ||
+           tok.class == number::Class ||
+           tok.class == boolean::Class;
+end
+
 # Parses an atoms
 function parse_atom(p::Parser)
     return maybe_call(p, function()
@@ -340,7 +348,7 @@ function parse_atom(p::Parser)
         elseif is_next(p, "match") return parse_match(p);
         else
             tok = next(p);
-            if tok.class == var::Class || tok.class == number::Class || tok.value == "[]"
+            if is_atom(tok) || tok.value == "[]"
                 return tok;
             end
             throw(string("Unknown atom: ", tok.value));
@@ -365,7 +373,7 @@ end
 
 # Determines if the input token is matchable
 function is_matchable(tok::Token)
-    if tok.class == var::Class || tok.class == number::Class
+    if is_atom(tok)
         return true;
     elseif tok.value == "[]"# || tok.value == "("
         return true;
@@ -406,8 +414,8 @@ end
 function parse_match(p::Parser)
     skip_sym(p, "match");
     tok = next(p);
-    # Can only match on variables and numbers
-    if tok.class != var::Class && tok.class != number::Class
+    # Can only match on variables, numbers, and booleans
+    if !is_token(tok)
         throw(string(tok.value, " is not matchable."));
     end
     skip_sym(p, "with");
