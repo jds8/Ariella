@@ -14,6 +14,7 @@ import Main.LexerModule.binary
 using Main.ParserModule;
 
 export interpret, evaluate;
+export Bool_Value, Number_Value;
 
 # Gets Ariella type given a Julia value
 get_type(val::Int64) = Int_Type();
@@ -36,17 +37,18 @@ struct Number_Value{T <: Real} <: Value
 end
 struct Bool_Value <: Value
     value::Bool
-    type::Bool_Value()
-    Bool_Value(val::Bool) = new(val, Bool_Value());
+    type::Bool_Type
+    Bool_Value(val::Bool) = new(val, Bool_Type());
     Bool_Value(val::Bool, type::Bool_Value) = new(val, type);
 end
 struct Function_Value <: Value
     value::Function
     type::Function_Type
 end
+struct Null_Value <: Value end;
 
 # Getters for Values
-get_value(num::Number_Value{T})::T where {T <: Real} = num.value;
+get_value(num::Number_Value{T} where {T <: Real})::T = num.value;
 get_value(bool::Bool_Value)::Bool = bool.value;
 get_value(fn::Function_Value)::Function = fn.value;
 get_type(num::Number_Value{T})::Numeric_Type = num.type;
@@ -72,16 +74,16 @@ import Base.+, Base.-, Base.*, Base./
 ##################################################
 
 # Override operators for values
-function +(v1::Number_Value{T}, v2::Number_Value{U}) where {T,U <: Real}
+function +(v1::Number_Value{T}, v2::Number_Value{U} where {T,U <: Real})
     return Number_Value(v1.value + v2.value, v1.type + v2.type);
 end
-function -(v1::Number_Value{T}, v2::Number_Value{U}) where {T,U <: Real}
+function -(v1::Number_Value{T}, v2::Number_Value{U} where {T,U <: Real})
     return Number_Value(v1.value - v2.value, v1.type - v2.type);
 end
-function *(v1::Number_Value{T}, v2::Number_Value{U}) where {T,U <: Real}
+function *(v1::Number_Value{T}, v2::Number_Value{U} where {T,U <: Real})
     return Number_Value(v1.value * v2.value, v1.type * v2.type);
 end
-function /(v1::Number_Value{T}, v2::Number_Value{U}) where {T,U <: Real}
+function /(v1::Number_Value{T}, v2::Number_Value{U} where {T,U <: Real})
     return Number_Value(v1.value / v2.value, v1.type / v2.type);
 end
 
@@ -140,7 +142,7 @@ end
 
 # Returns a Function_Value of the same type as v1 that simply returns v2
 # Throws if v2 is a different type from the return type of v1
-function num_to_fun(num::Number_Value{T}, fun::Function_Value)::Function where {T <: Real}
+function num_to_fun(num::Number_Value{T}, fun::Function_Value where {T <: Real})::Function
     if num.type == fun.type.return_type
         args_str = get_rest_of_args(fun.type);
         new_fun = generate_fun_from_strs(args_str, string(num.value));
@@ -150,34 +152,26 @@ function num_to_fun(num::Number_Value{T}, fun::Function_Value)::Function where {
 end
 
 # Override operators for functions and numbers
-function +(v1::Function_Value, v2::Number_Value{T}) where {T <: Real}
+function +(v1::Function_Value, v2::Number_Value{T} where {T <: Real})
     f2 = num_to_fun(v2, v1);
     return Function_Value(create_fn(v1, +, f2), v1.type);
 end
-function -(v1::Function_Value, v2::Number_Value{T}) where {T <: Real}
+function -(v1::Function_Value, v2::Number_Value{T} where {T <: Real})
     f2 = num_to_fun(v2, v1);
     return Function_Value(create_fn(v1, -, f2), v1.type);
 end
-function *(v1::Function_Value, v2::Number_Value{T}) where {T <: Real}
+function *(v1::Function_Value, v2::Number_Value{T} where {T <: Real})
     f2 = num_to_fun(v2, v1);
     return Function_Value(create_fn(v1, *, f2), v1.type);
 end
-function /(v1::Function_Value, v2::Number_Value{T}) where {T <: Real}
+function /(v1::Function_Value, v2::Number_Value{T} where {T <: Real})
     f2 = num_to_fun(v2, v1);
     return Function_Value(create_fn(v1, /, f2), v1.type);
 end
-function +(v1::Number_Value{T}, v2::Function_Value) where {T <: Real}
-    return +(v2, v1);
-end
-function -(v1::Number_Value{T}, v2::Function_Value) where {T <: Real}
-    return -(v2, v1);
-end
-function *(v1::Number_Value{T}, v2::Function_Value) where {T <: Real}
-    return *(v2, v1);
-end
-function /(v1::Number_Value{T}, v2::Function_Value) where {T <: Real}
-    return /(v2, v1);
-end
++(v1::Number_Value{T}, v2::Function_Value where {T <: Real}) = +(v2, v1);
+-(v1::Number_Value{T}, v2::Function_Value where {T <: Real}) = -(v2, v1);
+*(v1::Number_Value{T}, v2::Function_Value where {T <: Real}) = *(v2, v1);
+/(v1::Number_Value{T}, v2::Function_Value where {T <: Real}) = /(v2, v1);
 
 # Definition_Table is for storing variable name->Value pairs
 struct Definition_Table
@@ -196,11 +190,19 @@ function evaluate(t::Token, table::Definition_Table)
     if t.class == number::Class
         return Number_Value(Meta.parse(t.value));
     elseif t.class == boolean::Class
-        return Bool_Value(t.value);
+        return Bool_Value(Meta.parse(t.value));
     elseif t.class == var::Class
         return get(table, t);
     end
     throw(string("Cannot evaluate token ", t.value, " of class ", t.class));
+end
+
+# Evaluate a null expression
+evaluate(null::Null_Expression, table::Definition_Table) = Null_Value();
+
+# Evaluate a unary expression
+function evaluate(unary_exp::Unary_Expression, table::Definition_Table)
+    return unary_exp.operator.operation(unary_exp.exp);
 end
 
 # Evaluate a binary expression
@@ -295,6 +297,19 @@ function evaluate(let_binding::Let_Binding, table::Definition_Table)
     value = evaluate(let_binding.exp);
     add!(table, let_binding.variable, value);
     evaluate(let_binding.rest, table);
+end
+
+as_bool(num::Number_Value{T} where {T <: Real})::Bool = get_value(num) != 0;
+as_bool(bool::Bool_Value)::Bool = get_value(bool);
+
+# Evaluates an if-statement
+function evaluate(if_statement::If_Statement, table::Definition_Table)
+    bool_val = evaluate(if_statement.condition, table);
+    if as_bool(bool_val)
+        return evaluate(then_exp, table);
+    else
+        return evaluate(else_exp, table);
+    end
 end
 
 # Interprets a program

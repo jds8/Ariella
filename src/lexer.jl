@@ -15,7 +15,7 @@ struct Token <: Matchable_Expression
     value::String
 end
 
-@enum Operator_Class assign=1 binary=2 null=3
+@enum Operator_Class binary=1 unary=2 null=3
 
 struct Operator
     value::String

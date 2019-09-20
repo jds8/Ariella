@@ -17,15 +17,19 @@ t = Tokenizer();
 
 # Create operators
 ops = Operator[];
+push!(ops, Operator("==", 5, binary, ==));
+push!(ops, Operator(">", 5, binary, >));
+push!(ops, Operator(">=", 5, binary, >=));
+push!(ops, Operator("<", 5, binary, <));
+push!(ops, Operator("<=", 5, binary, <=));
 push!(ops, Operator("+", 10, binary, +));
 push!(ops, Operator("-", 10, binary, -));
 push!(ops, Operator("*", 20, binary, *));
 push!(ops, Operator("/", 20, binary, /));
-push!(ops, Operator("<", 10, binary, <));
-push!(ops, Operator("<=", 5, binary, <=));
-push!(ops, Operator("==", 5, binary, ==));
-push!(ops, Operator(">", 5, binary, >));
-push!(ops, Operator(">=", 5, binary, >=));
+push!(ops, Operator("!", 25, unary, x::Bool_Value->!x.value);
+push!(ops, Operator("&&", 25, binary, (x::Bool_Value,y::Bool_value)->x.value&&y.value));
+push!(ops, Operator("||", 25, binary, (x::Bool_Value,y::Bool_value)->x.value||y.value));
+
 # h::t is the cons operator which prepends elements h onto t in a new list
 push!(ops, Operator("::", 30, binary, (h,t)->(h_copy=deepcopy(h);push!(hh, t...);)));
 

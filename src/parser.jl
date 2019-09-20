@@ -6,7 +6,7 @@ export Parser, parse, next, parse_type_annotation;
 export Variable_Type, Dynamic_Type, Concrete_Type, Primitive_Type, Numeric_Type;
 export Int_Type, Float_Type, Function_Type;
 export Null_Expression, If_Statement, Binary_Expression, Call, Let_Binding;
-export Abstract_Cons_Expression, Cons_Expression, Empty_Cons_Expression;
+export Unary_Expression, Abstract_Cons_Expression, Cons_Expression, Empty_Cons_Expression;
 export Pattern_Match;
 
 using Main.LexerModule
@@ -17,7 +17,7 @@ import Main.LexerModule.punc
 import Main.LexerModule.var
 import Main.LexerModule.number
 import Main.LexerModule.eof
-import Main.LexerModule.assign
+import Main.LexerModule.unary
 import Main.LexerModule.binary
 
 mutable struct Parser
@@ -49,8 +49,11 @@ struct If_Statement <: Expression
     condition::Expression
     then_exp::Expression
     else_exp::Expression
-    If_Statement(cond::Expression, then_exp::Expression) = new(cond, then_exp, Null_Expression())
-    If_Statement(cond::Expression, then_exp::Expression, else_exp::Expression) = new(cond, then_exp, else_exp)
+end
+
+struct Unary_Expression <: Expression
+    operator::Operator
+    exp::Expression
 end
 
 struct Binary_Expression <: Expression
@@ -344,12 +347,15 @@ function parse_atom(p::Parser)
             return exp;
         elseif is_next(p, "let") return parse_let_binding(p);
         elseif is_next(p, "if") return parse_if(p);
-        #elseif is_next(p, "true") || is_next(p, "false")) return parse_bool(p);
         elseif is_next(p, "match") return parse_match(p);
         else
             tok = next(p);
             if is_atom(tok) || tok.value == "[]"
                 return tok;
+            end
+            if as_op(op).op_class == unary::Operator_Class
+                exp = parse_expression(p);
+                return Unary_Expression(op, exp);
             end
             throw(string("Unknown atom: ", tok.value));
         end
@@ -450,6 +456,9 @@ function next_op(p::Parser)
     tok = peek_next(p);
     return get_operator(p, tok);
 end
+
+# Returns the token as an operator
+as_op(p::Parser, tok::Token) = get_operatorr(p, tok);
 
 function parse(tokens::Array{Token,1}, operators::Array{Operator,1}, types::Array{String,1})
     p = Parser(tokens, operators, types);
