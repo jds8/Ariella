@@ -74,16 +74,16 @@ import Base.+, Base.-, Base.*, Base./
 ##################################################
 
 # Override operators for values
-function +(v1::Number_Value{T}, v2::Number_Value{U} where {T,U <: Real})
+function +(v1::Number_Value{T}, v2::Number_Value{U}) where {T,U <: Real}
     return Number_Value(v1.value + v2.value, v1.type + v2.type);
 end
-function -(v1::Number_Value{T}, v2::Number_Value{U} where {T,U <: Real})
+function -(v1::Number_Value{T}, v2::Number_Value{U}) where {T,U <: Real}
     return Number_Value(v1.value - v2.value, v1.type - v2.type);
 end
-function *(v1::Number_Value{T}, v2::Number_Value{U} where {T,U <: Real})
+function *(v1::Number_Value{T}, v2::Number_Value{U}) where {T,U <: Real}
     return Number_Value(v1.value * v2.value, v1.type * v2.type);
 end
-function /(v1::Number_Value{T}, v2::Number_Value{U} where {T,U <: Real})
+function /(v1::Number_Value{T}, v2::Number_Value{U}) where {T,U <: Real}
     return Number_Value(v1.value / v2.value, v1.type / v2.type);
 end
 
@@ -142,7 +142,7 @@ end
 
 # Returns a Function_Value of the same type as v1 that simply returns v2
 # Throws if v2 is a different type from the return type of v1
-function num_to_fun(num::Number_Value{T}, fun::Function_Value where {T <: Real})::Function
+function num_to_fun(num::Number_Value{T}, fun::Function_Value)::Function where {T <: Real}
     if num.type == fun.type.return_type
         args_str = get_rest_of_args(fun.type);
         new_fun = generate_fun_from_strs(args_str, string(num.value));
@@ -168,10 +168,10 @@ function /(v1::Function_Value, v2::Number_Value{T} where {T <: Real})
     f2 = num_to_fun(v2, v1);
     return Function_Value(create_fn(v1, /, f2), v1.type);
 end
-+(v1::Number_Value{T}, v2::Function_Value where {T <: Real}) = +(v2, v1);
--(v1::Number_Value{T}, v2::Function_Value where {T <: Real}) = -(v2, v1);
-*(v1::Number_Value{T}, v2::Function_Value where {T <: Real}) = *(v2, v1);
-/(v1::Number_Value{T}, v2::Function_Value where {T <: Real}) = /(v2, v1);
++(v1::Number_Value{T}, v2::Function_Value) where {T <: Real} = +(v2, v1);
+-(v1::Number_Value{T}, v2::Function_Value) where {T <: Real} = -(v2, v1);
+*(v1::Number_Value{T}, v2::Function_Value) where {T <: Real} = *(v2, v1);
+/(v1::Number_Value{T}, v2::Function_Value) where {T <: Real} = /(v2, v1);
 
 # Definition_Table is for storing variable name->Value pairs
 struct Definition_Table
