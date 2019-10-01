@@ -1,32 +1,25 @@
 module LexerModule
 
+include("./operators.jl")
+include("./values.jl")
+include("./abstractexpressions.jl")
+
+using DelimitedFiles
+using .OperatorModule
+using .ValueModule
+using .AbstractExpressionsModule
+
+import .ValueModule.Expression;
+
 export Class, Token, Tokenizer, Operator_Class, Operator, Expression, Matchable_Expression;
 export getOperatorStrings, addToken!, lex, is_valid;
 
-using DelimitedFiles
-
 @enum Class op=1 var=2 number=3 boolean=4 kw=5 punc=6 eof=7
-
-abstract type Expression end;
-abstract type Matchable_Expression <: Expression end;
 
 struct Token <: Matchable_Expression
     class::Class
     value::String
 end
-
-@enum Operator_Class binary=1 unary=2 null=3
-
-struct Operator
-    value::String
-    precedence::Int64
-    op_class::Operator_Class
-    operation::Function
-end
-
-Operator(val::String) = Operator(val, -1, null::Operator_Class, ()->throw("Null operator"));
-
-is_valid(o::Operator) = o.precedence >= 1;
 
 # Tokenizer that keeps track of tokens, operators, and punctuation
 mutable struct Tokenizer

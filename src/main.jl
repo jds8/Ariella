@@ -1,37 +1,41 @@
 include("./lexer.jl");
 include("./parser.jl");
 include("./interpreter.jl");
+include("./operators.jl");
+include("./values.jl");
+include("./types.jl");
 
-using Main.LexerModule
-using Main.ParserModule
-using Main.Interpreter
+using .LexerModule
+using .ParserModule
+using .InterpreterModule
+using .OperatorModule
+using .ValueModule
+using .TypesModule
 
-import Main.LexerModule.op
-import Main.LexerModule.kw
-import Main.LexerModule.punc
-import Main.LexerModule.assign
-import Main.LexerModule.binary
+import .LexerModule.op
+import .LexerModule.kw
+import .LexerModule.punc
+import .LexerModule.assign
+import .LexerModule.binary
 
 # Create Tokenizer
 t = Tokenizer();
 
 # Create operators
 ops = Operator[];
-push!(ops, Operator("==", 5, binary, ==));
-push!(ops, Operator(">", 5, binary, >));
-push!(ops, Operator(">=", 5, binary, >=));
-push!(ops, Operator("<", 5, binary, <));
-push!(ops, Operator("<=", 5, binary, <=));
-push!(ops, Operator("+", 10, binary, +));
-push!(ops, Operator("-", 10, binary, -));
-push!(ops, Operator("*", 20, binary, *));
-push!(ops, Operator("/", 20, binary, /));
-push!(ops, Operator("!", 25, unary, x::Bool_Value->!x.value);
-push!(ops, Operator("&&", 25, binary, (x::Bool_Value,y::Bool_value)->x.value&&y.value));
-push!(ops, Operator("||", 25, binary, (x::Bool_Value,y::Bool_value)->x.value||y.value));
-
-# h::t is the cons operator which prepends elements h onto t in a new list
-push!(ops, Operator("::", 30, binary, (h,t)->(h_copy=deepcopy(h);push!(hh, t...);)));
+push!(ops, eqeq);
+push!(ops, gt);
+push!(ops, ge);
+push!(ops, lt);
+push!(ops, le);
+push!(ops, add);
+push!(ops, subtract);
+push!(ops, multiply);
+push!(ops, divide);
+push!(ops, not);
+push!(ops, and);
+push!(ops, or);
+push!(ops, cons);
 
 # Add operator tokens
 addToken!(t, ops);

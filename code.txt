@@ -1,6 +1,6 @@
 let f(x:int, y:(int->int->float)):float = y(x,x) in
 let g():int = 3*5+1*2 in
-let h(x:int, y:float):float = x + y * (g+g)() in
-match lst with
-| h::t -> h
-| [] -> let k() = 3 in k()
+let h(x:int, y:float):float = x + y * (g+g)() in h(1, 2.0)
+#match lst with
+#| h::t -> h
+#| [] -> let k() = 3 in k()

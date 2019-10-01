@@ -1,20 +1,101 @@
-module Interpreter
+module InterpreterModule
 
-using Main.LexerModule;
+include("./abstractexpressions.jl");
+include("./expression.jl");
+include("./variables.jl");
+include("./lexer.jl");
+include("./values.jl");
+include("./types.jl");
+include("./operators.jl");
 
-import Main.LexerModule.op
-import Main.LexerModule.kw
-import Main.LexerModule.punc
-import Main.LexerModule.var
-import Main.LexerModule.number
-import Main.LexerModule.eof
-import Main.LexerModule.assign
-import Main.LexerModule.binary
+using .AbstractExpressionsModule;
+using .ExpressionModule;
+using .VariableModule;
+using .LexerModule;
+using .ValueModule;
+using .TypesModule;
+using .OperatorModule;
 
-using Main.ParserModule;
+import .LexerModule.op
+import .LexerModule.kw
+import .LexerModule.punc
+import .LexerModule.var
+import .LexerModule.number
+import .LexerModule.eof
+import .LexerModule.assign
+import .LexerModule.binary
 
 export interpret, evaluate;
-export Bool_Value, Number_Value;
+
+# The string var.name is mapped to this struct via a Definition_Table
+# The variable var is bound to the expression exp for the first time in
+# the Definition_Table at index, index.
+struct Variable_Binding{T <: Variable}
+    index::Int64
+    var::T
+    exp::Expression
+end
+
+# Definition_Table is for storing variable name->Value pairs
+struct Definition_Table
+    maps::Array{Dict{String,Variable_Binding},1}
+end
+
+# Creates a Definition_Table using the first index Dicts from table
+Definition_Table(table::Definition_Table, index::Int64) = Definition_Table(table.maps[1:index]);
+
+# Gets the keys of the last dictionary in dt.maps
+keys(dt::Definition_Table) = keys(dt.maps[end]);
+
+# Determines if the name is in the table
+∈(name::String, dt::Definition_Table) = name in keys(dt);
+
+# A table containing transformations from one token to another
+struct Transformation_Table
+    map::Dict{Token,Expression}
+    Transformation_Table(map::Dict{Token,Expression}) = new(map);
+    Transformation_Table() = new(Dict{Token,Expression}());
+end
+
+# Determines if the Expression is in the table
+#∈(t::Token, transforms::Transformation_Table) = t in transforms.map.keys;
+
+# Transforms exp into another expression via the transforms table
+#transform(transforms::Transformation_Table, exp::Expression) = exp ∈ transforms ? transforms.map[exp] : exp;
+
+# Add a variable to the Definition_Table
+function add!(table::Definition_Table, var::Variable, exp::Expression)
+    dt = deepcopy(table.maps[end]);
+    dt[var.name] = Variable_Binding(length(table.maps)+1, var, exp);
+    push!(table.maps, dt);
+end
+
+# Retrieves a variable from the definition table
+function get_value(table::Definition_Table, binding::Variable_Binding{Expression_Variable})
+    index = binding.index;
+    exp = binding.exp;
+    dt = Definition_Table(table, index);
+    return evaluate(exp, dt);
+end
+
+# Retrieves a function variable
+function get_value(table::Definition_Table, binding::Variable_Binding{Function_Variable})
+    return Function_Value(binding.var.args, binding.exp, get_type(binding.var));
+end
+
+# Accesses var.name in the indexth index of the table
+function get(table::Definition_Table, var_name::String, index::Int64 = length(table.maps))
+    return table.maps[index][var_name];
+end
+
+# Gets the value in the defintion table for this token
+function get_value(table::Definition_Table, t::Token)
+    if t.value ∈ table
+        binding = get(table, t.value);
+        return get_value(table, binding);
+    end
+    throw(string("Unknown free variable: ", var.name));
+end
 
 # Gets Ariella type given a Julia value
 get_type(val::Int64) = Int_Type();
@@ -28,69 +109,19 @@ convert_type_to_str(atype::Bool_Type) = string(Bool);
 convert_type_to_str(atype::Function_Type) = string(Function);
 convert_type_to_str(atype::Dynamic_Type) = "";
 
-abstract type Value end;
-struct Number_Value{T <: Real} <: Value
-    value::T
-    type::Numeric_Type
-    Number_Value(val::T) = new(val, get_type(val));
-    Number_Value(val::T, type::Numeric_Type) = type == get_type(val) ? new(val,type) : error("Type mismatch");
-end
-struct Bool_Value <: Value
-    value::Bool
-    type::Bool_Type
-    Bool_Value(val::Bool) = new(val, Bool_Type());
-    Bool_Value(val::Bool, type::Bool_Value) = new(val, type);
-end
-struct Function_Value <: Value
-    value::Function
-    type::Function_Type
-end
-struct Null_Value <: Value end;
+# Evaluates a Value
+evaluate(value::Value, table::Definition_Table) = value;
 
-# Getters for Values
-get_value(num::Number_Value{T} where {T <: Real})::T = num.value;
-get_value(bool::Bool_Value)::Bool = bool.value;
-get_value(fn::Function_Value)::Function = fn.value;
-get_type(num::Number_Value{T})::Numeric_Type = num.type;
-get_type(bool::Bool_Value)::Bool_Type = bool.type;
-get_type(fn::Function_Value)::Function_Type = fn.type;
-
-# Define operations on Primitive_Types
-##################################################
-import Base.+, Base.-, Base.*, Base./
-+(x::Float_Type, y::Numeric_Type) = Float_Type();
--(x::Float_Type, y::Numeric_Type) = Float_Type();
-*(x::Float_Type, y::Numeric_Type) = Float_Type();
-/(x::Float_Type, y::Numeric_Type) = Float_Type();
-+(x::Numeric_Type, y::Float_Type) = Float_Type();
--(x::Numeric_Type, y::Float_Type) = Float_Type();
-*(x::Numeric_Type, y::Float_Type) = Float_Type();
-/(x::Numeric_Type, y::Float_Type) = Float_Type();
-+(x::Int_Type, y::Int_Type) = Int_Type();
--(x::Int_Type, y::Int_Type) = Int_Type();
-*(x::Int_Type, y::Int_Type) = Int_Type();
-/(x::Int_Type, y::Int_Type) = Float_Type();
-# Note that dividing Ints results in a Float
-##################################################
-
-# Override operators for values
-function +(v1::Number_Value{T}, v2::Number_Value{U}) where {T,U <: Real}
-    return Number_Value(v1.value + v2.value, v1.type + v2.type);
-end
-function -(v1::Number_Value{T}, v2::Number_Value{U}) where {T,U <: Real}
-    return Number_Value(v1.value - v2.value, v1.type - v2.type);
-end
-function *(v1::Number_Value{T}, v2::Number_Value{U}) where {T,U <: Real}
-    return Number_Value(v1.value * v2.value, v1.type * v2.type);
-end
-function /(v1::Number_Value{T}, v2::Number_Value{U}) where {T,U <: Real}
-    return Number_Value(v1.value / v2.value, v1.type / v2.type);
-end
-
-# Determines if we can operate on these two function variables
-# Only works when the return type is numeric (for now)
-function co_operable(f1::Function_Value, f2::Function_Value)
-    return f1.type == f2.type && isa(f1.type.return_type, Numeric_Type)
+# Evaluates a Token
+function evaluate(t::Token, table::Definition_Table)
+    if t.class == number::Class
+        return Number_Value(Meta.parse(t.value));
+    elseif t.class == boolean::Class
+        return Bool_Value(Meta.parse(t.value));
+    elseif t.class == var::Class
+        return get_value(table, t);
+    end
+    throw(string("Cannot evaluate token ", t.value, " of class ", t.class));
 end
 
 # Gets the arguments of f as a string of the form "(x, y::Type,...)"
@@ -126,23 +157,87 @@ function create_fn(v1::Function_Value, op::Function, v2::Function_Value)::Functi
     throw("Input functions are of different types.")
 end
 
+# Override operators for values
+function +(v1::ValueModule.Number_Value{T}, v2::ValueModule.Number_Value{U}) where {T,U <: Real}
+    return Number_Value(v1.value + v2.value, v1.type + v2.type);
+end
+function -(v1::ValueModule.Number_Value{T}, v2::ValueModule.Number_Value{U}) where {T,U <: Real}
+    return Number_Value(v1.value - v2.value, v1.type - v2.type);
+end
+function *(v1::ValueModule.Number_Value{T}, v2::ValueModule.Number_Value{U}) where {T,U <: Real}
+    return Number_Value(v1.value * v2.value, v1.type * v2.type);
+end
+function /(v1::ValueModule.Number_Value{T}, v2::ValueModule.Number_Value{U}) where {T,U <: Real}
+    return Number_Value(v1.value / v2.value, v1.type / v2.type);
+end
+
+# Determines if we can operate on these two function variables
+# Only works when the return type is numeric (for now)
+function is_co_operable(f1::ValueModule.Function_Value, f2::ValueModule.Function_Value)
+    return f1.type == f2.type && isa(f1.type.return_type, Numeric_Type)
+end
+
+# Transforms the ith local variable of the input function to be var
+# Returns a new Function_Value
+function transform(dt::Definition_Table, f::ValueModule.Function_Value,
+                   args::Array{Expression_Variable,1}, transforms::Transformation_Table)
+    transformed_body = transform(dt, f.body, transforms);
+    return Function_Value(args, transformed_body, f.type);
+end
+
+# Replaces all local function variables with new local variables such that
+# all functions passed in have the same local variable names
+function transform(dt::Definition_Table, vs::ValueModule.Function_Value...)
+    v1 = vs[1];
+    for i in 2:length(vs)
+        if !is_co_operable(v1, vs[i])
+            throw("Input functions have different types so are not co-operable.");
+        end
+    end
+    key_str = string(keys(dt)...);
+    fs = Function_Value[];
+    args = Expression_Variable[];
+    for j in 1:length(vs)
+        vj = vs[j];
+        transforms_j = Transformation_Table();
+        for (i, arg) in enumerate(vj.args)
+            var = string(key_str, i);
+            add(transforms_j, arg.name, var);
+            # Create Expression_Variables out of these new variable names
+            if j == 1
+                push!(args, Expression_Variable(var, arg.type));
+            end
+        end
+        fj = transform(dt, vj, args, transforms_j);
+        push!(fs, fj);
+    end
+    return (fs...,);
+end
+
+# Creates a Function_Value from two FVs and an operation
+# The arguments of the resultant function are a new set of variables in dt
+function function_operation_helper(v1::ValueModule.Function_Value, o::OperatorModule.Operator, v2::ValueModule.Function_Value, dt::Definition_Table)
+    (f1, f2) = transform(dt, v1, v2);
+    return Function_Value(f1.args, Binary_Expression(f1, o, f2), f1.type);
+end
+
 # Override operators for functions
-function +(v1::Function_Value, v2::Function_Value)
-    return Function_Value(create_fn(v1, +, v2), v1.type);
+function +(v1::ValueModule.Function_Value, v2::ValueModule.Function_Value, dt::Definition_Table)
+    return function_operation_helper(v1, Operator.add, v2, dt);
 end
-function -(v1::Function_Value, v2::Function_Value)
-    return Function_Value(create_fn(v1, -, v2), v1.type);
+function -(v1::ValueModule.Function_Value, v2::ValueModule.Function_Value, dt::Definition_Table)
+    return function_operation_helper(v1, Operator.subtract, v2, dt);
 end
-function *(v1::Function_Value, v2::Function_Value)
-    return Function_Value(create_fn(v1, *, v2), v1.type);
+function *(v1::ValueModule.Function_Value, v2::ValueModule.Function_Value, dt::Definition_Table)
+    return function_operation_helper(v1, Operator.multiply, v2, dt);
 end
-function /(v1::Function_Value, v2::Function_Value)
-    return Function_Value(create_fn(v1, /, v2), v1.type);
+function /(v1::ValueModule.Function_Value, v2::ValueModule.Function_Value, dt::Definition_Table)
+    return function_operation_helper(v1, Operator.divide, v2, dt);
 end
 
 # Returns a Function_Value of the same type as v1 that simply returns v2
 # Throws if v2 is a different type from the return type of v1
-function num_to_fun(num::Number_Value{T}, fun::Function_Value)::Function where {T <: Real}
+function num_to_fun(num::Number_Value{T}, fun::Function_Value) where {T <: Real}
     if num.type == fun.type.return_type
         args_str = get_rest_of_args(fun.type);
         new_fun = generate_fun_from_strs(args_str, string(num.value));
@@ -154,7 +249,7 @@ end
 # Override operators for functions and numbers
 function +(v1::Function_Value, v2::Number_Value{T} where {T <: Real})
     f2 = num_to_fun(v2, v1);
-    return Function_Value(create_fn(v1, +, f2), v1.type);
+    return Function_Value(Binary_Expression(v1.exp, Operator("+"), v2), v1.type);
 end
 function -(v1::Function_Value, v2::Number_Value{T} where {T <: Real})
     f2 = num_to_fun(v2, v1);
@@ -173,30 +268,6 @@ end
 *(v1::Number_Value{T}, v2::Function_Value) where {T <: Real} = *(v2, v1);
 /(v1::Number_Value{T}, v2::Function_Value) where {T <: Real} = /(v2, v1);
 
-# Definition_Table is for storing variable name->Value pairs
-struct Definition_Table
-    map::Dict{String,Value}
-end
-
-# Gets a value from the Definition_Table given a token/variable name
-function get(table::Definition_Table, t::Token)
-    if t.value in table.keys
-        return table.map[t.value];
-    end
-    throw(string("Unknown free variable: ", t.value));
-end
-
-function evaluate(t::Token, table::Definition_Table)
-    if t.class == number::Class
-        return Number_Value(Meta.parse(t.value));
-    elseif t.class == boolean::Class
-        return Bool_Value(Meta.parse(t.value));
-    elseif t.class == var::Class
-        return get(table, t);
-    end
-    throw(string("Cannot evaluate token ", t.value, " of class ", t.class));
-end
-
 # Evaluate a null expression
 evaluate(null::Null_Expression, table::Definition_Table) = Null_Value();
 
@@ -212,33 +283,13 @@ function evaluate(binary_exp::Binary_Expression, table::Definition_Table)
     return binary_exp.operator.operation(left_val, right_val);
 end
 
-# Add an expression variable to the Definition_Table
-function add!(table::Definition_Table, var::Expression_Variable, exp::Expression)
-    value = evaluate(exp, table);
-    if var.type == Dynamic_Type() || var.type == value.type
-        table[var.name] = value;
-    else
-        throw(string("Type mismatch: ", var.value, " is not of type ", value.type));
-    end
-end
-
-# Add a function variable to the Definition_Table
-function add!(table::Definition_Table, var::Function_Variable, exp::Expression)
-    value = evaluate(exp, table);
-    if var.return_type == Dynamic_Type() || var.return_type == value.type
-        table[var.name] = value;
-    else
-        throw(string("Type mismatch: ", var.value, " is not of type ", value.type));
-    end
-end
-
 # An infix operator that applies fun on obj
 →(obj, fun) = fun(obj);
 
 # Returns a particular Value
 make_value(num_val::T, type::Numeric_Type) = Number_Value(num_val);
 make_value(bool_val::Bool, type::Bool_Type) = Bool_Value(bool_val);
-make_value(fun_val::Function, type::Function_Type) = Function_Value(fun_val, type);
+make_value(fun_val::Expression, type::Function_Type) = Function_Value(fun_val, type);
 
 # Returns a string representing the first length(args) arguments of
 # the function being supplied by args and the rest supplied as x,xx,xxx...
@@ -251,7 +302,7 @@ function get_partial_application_str(fn::Function, args::Array{Value,1}, other_a
     # Ignore the initial "(" in other_args
     unsupplied_args = other_args[2:end];
     output_call = string(fn, "(");
-    output_call = string(output_call, join(args.→get_value, ","), ",");
+    output_call = string(output_call, join(args.get_underlying, ","), ",");
     output_call = string(output_call, unsupplied_args);
     return output_call;
 end
@@ -259,10 +310,10 @@ end
 # Evaluates a Call expression
 function evaluate(call::Call, table::Definition_Table)
     value = evaluate(call.exp, table);
-    fn_value = get_value(value);
+    fn_value = get_underlying(value);
     fn_type = get_type(value);
     # The number of arguments supplied can be fewer than the number requied
-    # The result in this case would be a curried function
+    # The result in this case would be a partially applied function
     num_missing_args = length(fn_type.arg_types) - length(call.arg_list);
     if num_missing_args >= 0
         args = Value[];
@@ -280,7 +331,7 @@ function evaluate(call::Call, table::Definition_Table)
         args_str = get_rest_of_args(fn_type, length(args));
         # If all arguments have been supplied, then call the function
         if args_str == "()"
-            call_value = eval(Expr(:call, fn_value, (args.→get_value)...));
+            call_value = eval(Expr(:call, fn_value, (args.get_underlying)...));
         # Otherwise, curry it
         else
             out_str = get_partial_application_str(fn_value, args, args_str);
@@ -294,13 +345,12 @@ end
 
 # Evaluates a let-binding
 function evaluate(let_binding::Let_Binding, table::Definition_Table)
-    value = evaluate(let_binding.exp);
-    add!(table, let_binding.variable, value);
+    add!(table, let_binding.variable, let_binding.exp);
     evaluate(let_binding.rest, table);
 end
 
-as_bool(num::Number_Value{T} where {T <: Real})::Bool = get_value(num) != 0;
-as_bool(bool::Bool_Value)::Bool = get_value(bool);
+as_bool(num::Number_Value{T} where {T <: Real})::Bool = get_underlying(num) != 0;
+as_bool(bool::Bool_Value)::Bool = get_underlying(bool);
 
 # Evaluates an if-statement
 function evaluate(if_statement::If_Statement, table::Definition_Table)
@@ -315,9 +365,11 @@ end
 # Interprets a program
 function interpret(prog::Array{Expression, 1})
     table = Definition_Table();
+    out_values = [];
     for exp in prog
-        evaluate(exp, table);
+        push!(out_values, evaluate(exp, table));
     end
+    return out_values;
 end
 
 end

@@ -1,24 +1,25 @@
 module ParserModule
 
+include("./lexer.jl")
+include("./types.jl")
+include("./variables.jl")
+
+using .LexerModule
+using .TypesModule
+using .VariableModule
+
 import Base.parse;
 
+import .LexerModule.op
+import .LexerModule.kw
+import .LexerModule.punc
+import .LexerModule.var
+import .LexerModule.number
+import .LexerModule.eof
+import .LexerModule.unary
+import .LexerModule.binary
+
 export Parser, parse, next, parse_type_annotation;
-export Variable_Type, Dynamic_Type, Concrete_Type, Primitive_Type, Numeric_Type;
-export Int_Type, Float_Type, Function_Type;
-export Null_Expression, If_Statement, Binary_Expression, Call, Let_Binding;
-export Unary_Expression, Abstract_Cons_Expression, Cons_Expression, Empty_Cons_Expression;
-export Pattern_Match;
-
-using Main.LexerModule
-
-import Main.LexerModule.op
-import Main.LexerModule.kw
-import Main.LexerModule.punc
-import Main.LexerModule.var
-import Main.LexerModule.number
-import Main.LexerModule.eof
-import Main.LexerModule.unary
-import Main.LexerModule.binary
 
 mutable struct Parser
     tokens::Array{Token,1}
@@ -43,46 +44,13 @@ function is_type(p::Parser, type::String)
     return hasskey(p.baseTypeMap, type);
 end
 
-struct Null_Expression <: Expression end;
+# Gets a Concrete_Type as a string
+to_string(type::Concrete_Type) = string(type)[1:end-2];
 
-struct If_Statement <: Expression
-    condition::Expression
-    then_exp::Expression
-    else_exp::Expression
-end
-
-struct Unary_Expression <: Expression
-    operator::Operator
-    exp::Expression
-end
-
-struct Binary_Expression <: Expression
-    left::Expression
-    operator::Operator
-    right::Expression
-end
-
-struct Call <: Expression
-    exp::Expression
-    arg_list::Array{Expression, 1}
-end
-
-# Define types for variables
-abstract type Variable_Type end;
-struct Dynamic_Type <: Variable_Type end;
-
-# Define concrete types of variables
-abstract type Concrete_Type <: Variable_Type end;
-abstract type Primitive_Type <: Concrete_Type end;
-abstract type Numeric_Type <: Primitive_Type end;
-struct Float_Type <: Numeric_Type end;
-struct Int_Type <: Numeric_Type end;
-struct Bool_Type <: Primitive_Type end;
-
-# Define function types for functions
-struct Function_Type <: Concrete_Type
-    arg_types::Array{Variable_Type,1};
-    return_type::Variable_Type;
+# Gets a Function Type as a string
+function to_string(ft::Function_Type)
+    return_str = ft.return_type == Dynamic_Type ? "" : string("->", ft.return_type);
+    return string("(", join(fn.arg_types, ","), ")", return_str);
 end
 
 # Define equality on Function_Types
@@ -104,42 +72,8 @@ function get_type(type_str::String)
     end
 end
 
-abstract type Variable end;
-
-struct Expression_Variable <: Variable
-    name::String
-    type::Variable_Type
-    Expression_Variable(name::String, type::Variable_Type) = new(name, type);
-    Expression_Variable(name::String) = new(name, Dynamic_Type());
-end
-
-struct Function_Variable <: Variable
-    name::String
-    args::Array{Expression_Variable,1}
-    return_type::Variable_Type
-end
-
-struct Let_Binding <: Expression
-    variable::Variable
-    exp::Expression
-    rest::Expression
-    Let_Binding(var::Variable, exp::Expression, rest::Expression) = new(var, exp, rest);
-    Let_Binding(var::Variable, exp::Expression) = new(var, exp, Null_Expression());
-end
-
-abstract type Abstract_Cons_Expression <: Matchable_Expression end;
-
-struct Cons_Expression <: Abstract_Cons_Expression
-    head::String
-    tail::Abstract_Cons_Expression
-end
-
-struct Empty_Cons_Expression <: Abstract_Cons_Expression end;
-
-struct Pattern_Match <: Expression
-    exp::Expression_Variable
-    clauses::Array{Pair{Matchable_Expression, Expression}, 1}
-end
+# Returns a Function_Type corresponding to the input Function_Variable
+get_type(fv::Function_Variable) = Function_Type(fv.args.→get_type, fv.return_type);
 
 # Returns whether the parser is at the end of the file
 function is_at_end(p::Parser)
