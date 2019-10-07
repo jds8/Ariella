@@ -72,9 +72,6 @@ function get_type(type_str::String)
     end
 end
 
-# Returns a Function_Type corresponding to the input Function_Variable
-get_type(fv::Function_Variable) = Function_Type(fv.args.→get_type, fv.return_type);
-
 # Returns whether the parser is at the end of the file
 function is_at_end(p::Parser)
     return p.current + 1 > length(p.tokens);

@@ -21,6 +21,10 @@ struct Function_Type <: Concrete_Type
     return_type::Variable_Type;
 end
 
+# Accessors for Function_Type
+get_arg_types(ft::Function_Type) = ft.arg_types;
+get_return_type(ft::Function_Type) = ft.return_type;
+
 # Define operations on Primitive_Types
 ##################################################
 import Base.+, Base.-, Base.*, Base./
